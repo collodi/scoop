@@ -1,0 +1,11 @@
+[package]
+name = "scoop"
+version = "0.1.0"
+authors = ["collodi <wkim149@gmail.com>"]
+
+[dependencies]
+daemonize = "0.3.0"
+chrono = "0.4.2"
+serde = "1.0"
+serde_derive = "1.0"
+docopt = "0.8.3"
