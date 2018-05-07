@@ -1,26 +1,31 @@
 #[macro_use]
 extern crate serde_derive;
+extern crate serde_json;
 extern crate daemonize;
 extern crate chrono;
 extern crate docopt;
+extern crate rand;
+
+mod jobs;
+use jobs::*;
 
 use std::fs;
+use std::fs::File;
 use std::path::Path;
 use std::error::Error;
 use std::fs::OpenOptions;
+
 use daemonize::Daemonize;
 use chrono::Local;
 use docopt::Docopt;
+use serde_json::Value;
 
 const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
 const DATA_DIR: &'static str = concat!(env!("HOME"), "/.local/share/scoop/");
 const PID_FILE: &'static str = concat!(env!("HOME"), "/.local/share/scoop/scoop.pid");
-const JOB_FILE: &'static str = concat!(env!("HOME"), "/.local/share/scoop/jobs");
 const LOG_FILE: &'static str = concat!(env!("HOME"), "/.local/share/scoop/logs");
 const ERR_FILE: &'static str = concat!(env!("HOME"), "/.local/share/scoop/errors");
-
-const TIME_FORMAT: &'static str = "%Y-%m-%d %H:%M:%S";
 
 const USAGE: &'static str = "
 Dumb scheduler here.
@@ -29,6 +34,7 @@ Usage:
   scoop daemon
   scoop list
   scoop add <time> <command>
+  scoop del <id>
   scoop (-h | --help)
   scoop --version
 
@@ -42,9 +48,11 @@ struct Args {
         flag_version: bool,
         arg_time: String,
         arg_command: String,
+        arg_id: String,
         cmd_daemon: bool,
         cmd_list: bool,
-        cmd_add: bool
+        cmd_add: bool,
+        cmd_del: bool
 }
 
 fn main() {
@@ -56,6 +64,10 @@ fn main() {
                 fs::create_dir_all(DATA_DIR).unwrap();
         }
 
+        if !Path::new(JOB_FILE).exists() {
+                File::create(JOB_FILE).unwrap();
+        }
+        
         /* show version */
         if args.flag_version {
                 println!("scoop v{}", VERSION);
@@ -68,23 +80,9 @@ fn main() {
                 add_job(&args.arg_time, &args.arg_command);
         } else if args.cmd_daemon {
                 start_daemon();
+        } else if args.cmd_del {
+                del_job(&args.arg_id);
         }
-}
-
-fn list_jobs() {
-        if !Path::new(JOB_FILE).exists() {
-                println!("No jobs.");
-                return;
-        }
-
-        let f = File::open(JOB_FILE).unwrap();
-        BufReader::new(f).lines().for_each(|j| {
-                /* TODO print a job */
-        });
-}
-
-fn add_job(time: &str, cmd: &str) {
-
 }
 
 fn start_daemon() {
@@ -113,8 +111,7 @@ fn start_daemon() {
                         /* TODO wait */
                 },
                 Err(e) => {
-                        logerr("daemon failed to start.");
-                        logerr(e);
+                        logerr("daemon failed to start.", e);
                 }
         }
 }
@@ -123,6 +120,7 @@ fn log(msg: &str) {
         println!("{}: {}", Local::now().format(TIME_FORMAT), msg);
 }
 
-fn logerr<T: Error>(msg: T) {
+fn logerr<T: Error>(msg: &str, err: T) {
         eprintln!("{}: {}", Local::now().format(TIME_FORMAT), msg);
+        eprintln!("{}: {}", Local::now().format(TIME_FORMAT), err);
 }
