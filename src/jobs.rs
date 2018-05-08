@@ -65,7 +65,7 @@ pub fn add_job(time: &str, cmd: &str, args: &Vec<String>) {
         }
         /* replace old file */
         fs::rename(TMP_JOB_FILE, JOB_FILE).unwrap();
-        println!("Job {} inserted.", job.id);
+        println!("Job {} scheduled.", job.id);
 }
 
 fn parse_time(s: &str) -> Option<NaiveDateTime> {

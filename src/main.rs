@@ -39,7 +39,7 @@ Dumb scheduler here.
 Usage:
   scoop daemon
   scoop list
-  scoop add <time> <command> <args>...
+  scoop add <time> <command> [<args>...]
   scoop del <id>
   scoop (-h | --help)
   scoop --version
