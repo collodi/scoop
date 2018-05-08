@@ -5,20 +5,26 @@ extern crate daemonize;
 extern crate chrono;
 extern crate docopt;
 extern crate rand;
+extern crate notify;
 
 mod jobs;
 use jobs::*;
 
 use std::fs;
+use std::thread;
 use std::fs::File;
 use std::path::Path;
 use std::error::Error;
+use std::time::Duration;
 use std::fs::OpenOptions;
+use std::process::Command;
+use std::sync::mpsc::channel;
+use std::sync::{Arc, Mutex, Condvar};
 
 use daemonize::Daemonize;
-use chrono::Local;
+use chrono::{Local, NaiveDateTime};
 use docopt::Docopt;
-use serde_json::Value;
+use notify::{RecommendedWatcher, Watcher, RecursiveMode, RawEvent};
 
 const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
@@ -33,7 +39,7 @@ Dumb scheduler here.
 Usage:
   scoop daemon
   scoop list
-  scoop add <time> <command>
+  scoop add <time> <command> <args>...
   scoop del <id>
   scoop (-h | --help)
   scoop --version
@@ -48,6 +54,7 @@ struct Args {
         flag_version: bool,
         arg_time: String,
         arg_command: String,
+        arg_args: Vec<String>,
         arg_id: String,
         cmd_daemon: bool,
         cmd_list: bool,
@@ -77,7 +84,7 @@ fn main() {
         if args.cmd_list {
                 list_jobs();
         } else if args.cmd_add {
-                add_job(&args.arg_time, &args.arg_command);
+                add_job(&args.arg_time, &args.arg_command, &args.arg_args);
         } else if args.cmd_daemon {
                 start_daemon();
         } else if args.cmd_del {
@@ -108,10 +115,11 @@ fn start_daemon() {
         match daemon.start() {
                 Ok(_) => {
                         log("daemon started.");
-                        /* TODO wait */
+                        spawn_daemon();
                 },
                 Err(e) => {
-                        logerr("daemon failed to start.", e);
+                        println!("daemon failed to start.");
+                        println!("{}", e);
                 }
         }
 }
@@ -123,4 +131,66 @@ fn log(msg: &str) {
 fn logerr<T: Error>(msg: &str, err: T) {
         eprintln!("{}: {}", Local::now().format(TIME_FORMAT), msg);
         eprintln!("{}: {}", Local::now().format(TIME_FORMAT), err);
+}
+
+fn spawn_daemon() {
+        let pair = Arc::new((Mutex::new(false), Condvar::new()));
+        let pair2 = pair.clone();
+
+        thread::spawn(move || {
+                let &(ref lock, ref cvar) = &*pair2;
+
+                loop {
+                        let res = watch_jobs();
+                        let mut stop = lock.lock().unwrap();
+                        if let Err(e) = res {
+                                logerr("fs watcher died.", e);
+
+                                *stop = true;
+                                cvar.notify_one();
+                                break;
+                        }
+
+                        cvar.notify_one();
+                }
+        });
+
+        let &(ref lock, ref cvar) = &*pair;
+        let mut stop = lock.lock().unwrap();
+        loop {
+                let mut dur = Duration::from_secs(3600);
+                if let Some(job) = get_first_job() {
+                        let t = NaiveDateTime::parse_from_str(&job.time, TIME_FORMAT).unwrap();
+                        let now = Local::now().naive_local();
+
+                        let sub = t.signed_duration_since(now).num_seconds();
+                        if sub < 0 {
+                                del_job(&job.id);
+                        } else if sub == 0 {
+                                // if current, do it
+                                let cmd = Command::new(&job.cmd).args(&job.args).spawn();
+                                if let Err(e) = cmd {
+                                        logerr(&format!("command '{}' failed to start.", job.cmd), e);
+                                }
+                                del_job(&job.id);
+                        } else { 
+                                // if future, calc wait time
+                                dur = Duration::from_secs(sub as u64);
+                        }
+                }
+                
+                let res = cvar.wait_timeout(stop, dur).unwrap();
+                stop = res.0;
+                if *stop {
+                        break;
+                }
+        }
+}
+
+fn watch_jobs() -> notify::Result<RawEvent> {
+        let (tx, rx) = channel();
+        let mut watcher: RecommendedWatcher = try!(Watcher::new_raw(tx));
+        try!(watcher.watch(JOB_FILE, RecursiveMode::Recursive));
+
+        rx.recv().map_err(|e| notify::Error::Generic(format!("{}", e)))
 }

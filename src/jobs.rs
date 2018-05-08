@@ -15,18 +15,20 @@ const TMP_JOB_FILE: &'static str = concat!(env!("HOME"), "/.local/share/scoop/jo
 pub const TIME_FORMAT: &'static str = "%Y-%m-%d %H:%M:%S";
 
 #[derive(Serialize, Deserialize)]
-struct Job {
-        id: String,
-        time: String,
-        cmd: String
+pub struct Job {
+        pub id: String,
+        pub time: String,
+        pub cmd: String,
+        pub args: Vec<String>
 }
 
-pub fn add_job(time: &str, cmd: &str) {
+pub fn add_job(time: &str, cmd: &str, args: &Vec<String>) {
         let t = parse_time(time).expect("Invalid time format.");
         let job = Job { 
                 id: format!("{:04x}", thread_rng().gen::<u16>()),
                 time: t.format(TIME_FORMAT).to_string(), 
-                cmd: cmd.to_owned() 
+                cmd: cmd.to_owned(),
+                args: args.clone()
         };
 
         let mut inserted = false;
@@ -120,4 +122,12 @@ pub fn list_jobs() {
                 let job: Job = serde_json::from_str(&line).unwrap();
                 println!("{}\t{}\t{}", job.id, job.time, job.cmd);
         };
+}
+
+pub fn get_first_job() -> Option<Job> {
+        let f = File::open(JOB_FILE).unwrap();
+
+        let mut line = String::new();
+        BufReader::new(f).read_line(&mut line).unwrap();
+        serde_json::from_str(&line).ok()
 }
