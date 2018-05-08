@@ -154,7 +154,7 @@ pub fn list_jobs() {
         println!("{:4}\t{:19}\t{}", "ID", "TIME", "COMMAND");
         for line in BufReader::new(f).lines() {
                 let job: Job = serde_json::from_str(&line.unwrap()).unwrap();
-                println!("{}\t{}\t{}", job.id, job.time, job.cmd);
+                println!("{}\t{}\t{} {}", job.id, job.time, job.cmd, job.args.join(" "));
         };
 }
 
