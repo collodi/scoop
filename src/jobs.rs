@@ -24,7 +24,12 @@ pub struct Job {
 }
 
 pub fn add_job(time: &str, cmd: &str, args: &Vec<String>) {
-        let t = parse_time(time).expect("Invalid time format.");
+        let t = if let Some(x) = parse_time(time) { x }
+                else {
+                        eprintln!("Invalid time format.");
+                        exit(1);
+                };
+
         if t < Local::now().naive_local() {
                 eprintln!("Specified time is in the past.");
                 exit(1);
