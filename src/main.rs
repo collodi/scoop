@@ -39,7 +39,7 @@ Dumb scheduler here.
 Usage:
     scoop daemon
     scoop list
-    scoop add <time> <command> [<args>...]
+    scoop add <time> <command> [--] [<args>...]
     scoop del <id>
     scoop (-h | --help)
     scoop --version
@@ -55,6 +55,8 @@ You can specify time in one of two ways:
 The grammar for time is specified here:
     <offset> := <N>(d|h|m|s)[.<offset>]
     <instant> := <N>(Y|M|D|h|m|s)[.<instant>]
+
+Use -- if an argument starts with a hyphen.
 ";
 
 #[derive(Deserialize)]
