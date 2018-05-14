@@ -1,6 +1,6 @@
 [package]
 name = "scoop"
-version = "0.1.2"
+version = "0.1.3"
 authors = ["collodi <wkim149@gmail.com>"]
 description = "Dumb scheduler daemon"
 license = "MIT"
@@ -14,3 +14,4 @@ serde_json = "1.0.17"
 docopt = "0.8.3"
 rand = "0.4"
 notify = "4.0.3"
+libc = "0.2.40"

@@ -6,6 +6,7 @@ extern crate chrono;
 extern crate docopt;
 extern crate rand;
 extern crate notify;
+extern crate libc;
 
 mod jobs;
 use jobs::*;
@@ -20,7 +21,9 @@ use std::fs::OpenOptions;
 use std::process::Command;
 use std::sync::mpsc::channel;
 use std::sync::{Arc, Mutex, Condvar};
+use std::os::unix::process::CommandExt;
 
+use libc::{wait, fork, setsid};
 use daemonize::Daemonize;
 use chrono::{Local, NaiveDateTime};
 use docopt::Docopt;
@@ -39,7 +42,7 @@ Dumb scheduler here.
 Usage:
     scoop daemon
     scoop list
-    scoop add <time> <command> [--] [<args>...]
+    scoop add <time> <command> [<args>...]
     scoop del <id>
     scoop (-h | --help)
     scoop --version
@@ -55,11 +58,9 @@ You can specify time in one of two ways:
 The grammar for time is specified here:
     <offset> := <N>(d|h|m|s)[.<offset>]
     <instant> := <N>(Y|M|D|h|m|s)[.<instant>]
-
-Use -- if an argument starts with a hyphen.
 ";
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 struct Args {
         flag_version: bool,
         arg_time: String,
@@ -74,7 +75,7 @@ struct Args {
 
 fn main() {
         let args: Args = Docopt::new(USAGE)
-                .and_then(|d| d.deserialize())
+                .and_then(|d| d.options_first(true).deserialize())
                 .unwrap_or_else(|e| e.exit());
 
         if !Path::new(DATA_DIR).exists() {
@@ -176,15 +177,12 @@ fn spawn_daemon() {
                         let sub = t.signed_duration_since(now).num_seconds();
                         if sub < 0 {
                                 del_job(&job.id);
-                        } else if sub == 0 {
-                                // if current, do it
-                                let cmd = Command::new(&job.cmd).args(&job.args).spawn();
-                                if let Err(e) = cmd {
-                                        logerr(&format!("command '{}' failed to start.", job.cmd), e);
-                                }
+                        } else if sub == 0 { 
                                 del_job(&job.id);
+                                /* if current, do it */
+                                exec_job(&job);
                         } else { 
-                                // if future, calc wait time
+                                /* if future, calc wait time */
                                 dur = Duration::from_secs(sub as u64);
                         }
                 }
@@ -193,6 +191,27 @@ fn spawn_daemon() {
                 stop = res.0;
                 if *stop {
                         break;
+                }
+        }
+}
+
+fn exec_job(job: &Job) {
+        unsafe {
+                let mut fk = fork();
+                let ptr: *mut i32 = &mut fk;
+
+                if fk == 0 {
+                        setsid();
+                        
+                        let rc = fork();
+                        if rc == 0 {
+                                let res = Command::new(&job.cmd).args(&job.args).exec();
+                                logerr(&format!("command '{}' failed to start.", job.cmd), res);
+                        } else {
+                                std::process::exit(0);
+                        }
+                } else {
+                        wait(ptr);
                 }
         }
 }
