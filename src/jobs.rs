@@ -7,7 +7,7 @@ use std::fs::OpenOptions;
 
 use serde_json;
 use rand::{Rng, thread_rng};
-use chrono::{Duration, Local, Timelike, Datelike};
+use chrono::{Duration, Local, Timelike};
 use chrono::naive::NaiveDateTime;
 
 pub const JOB_FILE: &'static str = concat!(env!("HOME"), "/.local/share/scoop/jobs");
@@ -83,32 +83,38 @@ fn parse_time(s: &str) -> Option<NaiveDateTime> {
                 t.split('.').fold(Some(now), parse_duration)
         } else if s.starts_with("@") {
                 let (_, t) = s.split_at(1);
-                t.split('.').fold(Some(now), parse_instant)
+                parse_instant(now, t)
         } else {
                 None
         }
 }
 
-fn parse_instant(now: Option<NaiveDateTime>, t: &str) -> Option<NaiveDateTime> {
-        if now.is_none() {
+fn parse_instant(now: NaiveDateTime, t: &str) -> Option<NaiveDateTime> {
+        let am = t.ends_with("am");
+        let pm = t.ends_with("pm");
+        if (!am && !pm) || t.len() > 6 || t.len() < 3 {
                 return None;
         }
 
-        let now = now.unwrap();
-        let (n, c) = t.split_at(t.len() - 1);
-        if let Ok(n) = n.parse() {
-                match c {
-                        "s" => now.with_second(n),
-                        "m" => now.with_minute(n),
-                        "h" => now.with_hour(n),
-                        "D" => now.with_day(n),
-                        "M" => now.with_month(n),
-                        "Y" => now.with_year(n as i32),
-                        _ => return None
-                }
-        } else {
-                None
+        let hh = t[0..(2 - (t.len() % 2))].parse().ok().filter(|&h| 0 < h && h < 13);
+        let mm = if t.len() == 6 { 
+                t[2..4].parse().ok().filter(|&m| m < 60) } else { 
+                Some(0) };
+
+        if hh.is_none() || mm.is_none() {
+                return None;
         }
+
+        let hh = hh.map(|h|
+                if h != 12 && pm { h + 12 } 
+                else if h == 12 && am { 0 } 
+                else { h }
+        );
+
+        now.with_hour(hh.unwrap())
+                .and_then(|n| n.with_minute(mm.unwrap()))
+                .and_then(|n| n.with_second(0))
+                .map(|n| if n <= now { n + Duration::days(1) } else { n })
 }
 
 fn parse_duration(now: Option<NaiveDateTime>, t: &str) -> Option<NaiveDateTime> {

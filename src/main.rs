@@ -52,12 +52,8 @@ Options:
     --version     Show version.
 
 You can specify time in one of two ways:
-    +<offset>
-    @<instant>
-
-The grammar for time is specified here:
-    <offset> := <N>(d|h|m|s)[.<offset>]
-    <instant> := <N>(Y|M|D|h|m|s)[.<instant>]
+    +[#d][#h][#m][#s] (at least one should be specified)
+    @h[mm](am|pm)
 ";
 
 #[derive(Deserialize, Debug)]
