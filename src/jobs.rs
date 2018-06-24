@@ -96,9 +96,10 @@ fn parse_instant(now: NaiveDateTime, t: &str) -> Option<NaiveDateTime> {
                 return None;
         }
 
-        let hh = t[0..(2 - (t.len() % 2))].parse().ok().filter(|&h| 0 < h && h < 13);
-        let mm = if t.len() == 6 { 
-                t[2..4].parse().ok().filter(|&m| m < 60) } else { 
+        let odd = t.len() % 2
+        let hh = t[0..(2 - odd)].parse().ok().filter(|&h| 0 < h && h < 13);
+        let mm = if t.len() > 4 { 
+                t[(2 - odd)..(4 - odd)].parse().ok().filter(|&m| m < 60) } else { 
                 Some(0) };
 
         if hh.is_none() || mm.is_none() {

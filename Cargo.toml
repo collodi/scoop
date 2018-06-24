@@ -1,6 +1,6 @@
 [package]
 name = "scoop"
-version = "0.1.4"
+version = "0.1.5"
 authors = ["collodi <wkim149@gmail.com>"]
 description = "Dumb scheduler daemon"
 license = "MIT"
